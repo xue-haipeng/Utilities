@@ -25,7 +25,7 @@ import java.io.IOException;
  */
 @Controller
 public class UploadDownloadController {
-    private static final Logger logger = LoggerFactory.getLogger(UploadController.class);
+    private static final Logger logger = LoggerFactory.getLogger(UploadDownloadController.class);
 
     @RequestMapping("/")
     public String home() {
