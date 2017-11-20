@@ -25,18 +25,25 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
-import static java.util.Arrays.asList;
-import static java.util.Collections.singletonList;
+import static java.util.Arrays.*;
+import static java.util.Collections.*;
+import static java.util.Comparator.comparingInt;
 import static java.util.stream.Collectors.toList;
+import static java.util.stream.Collectors.toMap;
 import static org.apache.commons.lang3.StringUtils.join;
+
+/**
+ * Created by xuehaipeng on 2017-11-18.
+ */
 
 @Service
 public class HighchartsExportServiceImpl implements HighchartsExportService {
     private static final Logger logger = LoggerFactory.getLogger(HighchartsExportServiceImpl.class);
 
     private static final MediaType APPLICATION_JSON_UTF8 = MediaType.parse("application/json; charset=utf-8");
+    private static final String SPLINE_TEMPLATE = "template/highcharts/spline_template.json";
+    private static final String RING_TEMPLATE = "template/highcharts/ring_template.json";
     private static final String IMAGE_TYPE = "?type=png";
 
     private final String OS_TYPE = System.getProperty("os.name").toLowerCase();
@@ -78,12 +85,11 @@ public class HighchartsExportServiceImpl implements HighchartsExportService {
     @Override
     public String getSplineChartOfInvokeTimes(String userPin, Long apiId, LocalDate date) throws IOException {
         date = date == null ? LocalDate.now().minusDays(1) : date;
-        getInvokeInfo(userPin, apiId, date).forEach((k, v) -> System.out.println(k + " : " + v));
-        Map<String, Integer> datas = fakeSplineData();    // to be replaced
+        Map<String, Integer> datas = getInvokeInfo(userPin, apiId, date);
         if (datas.size() == 0) {
             return "";
         }
-        ClassPathResource resource = new ClassPathResource("template/highcharts/spline_template.json");
+        ClassPathResource resource = new ClassPathResource(SPLINE_TEMPLATE);
         String content = join(Files.readAllLines(resource.getFile().toPath()), System.lineSeparator());
         List<String> keys = new ArrayList<>();
         List<Integer> values = new ArrayList<>();
@@ -92,13 +98,16 @@ public class HighchartsExportServiceImpl implements HighchartsExportService {
             values.add(v);
         });
         OptionalInt maxOption = datas.entrySet().stream().mapToInt(Map.Entry::getValue).max();
-        // Y 轴步长
-        int tickInterval = maxOption.orElse(4) / 4.0 > 1.0 ? (int) Math.ceil(maxOption.orElse(4) / 4.0) : 1;
+        final int tickInterval = maxOption.orElse(4) / 4.0 > 1.0
+                                        ? Math.ceil(maxOption.orElse(4) / 4.0) / 10 > 1.0    // 十位向上取整
+                                            ? 10 * (int) Math.ceil(maxOption.orElse(4) / 40.0)
+                                            : (int) Math.ceil(maxOption.orElse(4) / 4.0)
+                                        : 1;
         String payload = content
                 .replace("TICK_INTERVAL", String.valueOf(tickInterval))
                 .replace("CATEGORIES", JSON.toJSONString(keys))
                 .replace("DATA_ARRAY", JSON.toJSONString(values));
-        String fileName = String.format("spline_%s_%d_%s", userPin, apiId, date.format(DateTimeFormatter.BASIC_ISO_DATE));
+        String fileName = String.format("spline_%s_%d_%s", userPin, apiId, date.format(DateTimeFormatter.ISO_LOCAL_DATE));
         generateImage(Constants.HIGHCHARTS_EXPORT_SERVER_URL + IMAGE_TYPE, payload, fileName);
         String fileJson = storagePicture.upload(Files.readAllBytes(Paths.get(EXPORT_DIRECTORY + fileName)));
         JSONArray jsonArray = JSONArray.parseArray(fileJson);
@@ -110,12 +119,11 @@ public class HighchartsExportServiceImpl implements HighchartsExportService {
     @Override
     public String getRingChartOfInvokeErrors(String userPin, Long apiId, LocalDate date) throws IOException {
         date = date == null ? LocalDate.now().minusDays(1) : date;
-        getErrorDistribute(userPin, apiId, date).forEach((k, v) -> System.out.println(k + " : " + v));  // to be replaced
-        Map<String, Double> datas = fakeRingData();  // getErrorDistribute(userPin, apiId, date);
+        Map<String, Double> datas = getErrorDistribute(userPin, apiId, date);
         if (datas.size() == 0) {
             return "";
         }
-        ClassPathResource resource = new ClassPathResource("template/highcharts/ring_template.json");
+        ClassPathResource resource = new ClassPathResource(RING_TEMPLATE);
         List<String> list = Files.readAllLines(resource.getFile().toPath());
         List<String> colorSchema = null;
         if (datas.size() == 1 && datas.containsKey(GwErrorCodeEnum.SUCCESS.getName())) {
@@ -138,7 +146,7 @@ public class HighchartsExportServiceImpl implements HighchartsExportService {
         String content = join(list, System.lineSeparator());
         String payload = content.replace("COLOR_ARRAY", JSON.toJSONString(colorSchema))
                                 .replace("DATA_ARRAY", join(entries));
-        String fileName = String.format("ring_%s_%d_%s", userPin, apiId, date.format(DateTimeFormatter.BASIC_ISO_DATE));
+        String fileName = String.format("ring_%s_%d_%s", userPin, apiId, date.format(DateTimeFormatter.ISO_LOCAL_DATE));
         generateImage(Constants.HIGHCHARTS_EXPORT_SERVER_URL + IMAGE_TYPE, payload, fileName);
         String fileJson = storagePicture.upload(Files.readAllBytes(Paths.get(EXPORT_DIRECTORY + fileName)));
         JSONArray jsonArray = JSONArray.parseArray(fileJson);
@@ -158,36 +166,20 @@ public class HighchartsExportServiceImpl implements HighchartsExportService {
         });
     }
 
-    private Map<String, Integer> fakeSplineData() {
-        Map<String, Integer> datas = new LinkedHashMap<>();
-        IntStream.rangeClosed(0, 23)
-                .forEach(i -> {
-                    datas.put(String.valueOf(i), (int) Math.ceil(10 * Math.random()));
-                });
-        return datas;
-    }
-
-    private Map<String, Double> fakeRingData() {
-        Map<String, Double> datas = new HashMap<>();
-//        datas.put("正常", 20.0);
-        datas.put("接口欠费", 45.0);
-        datas.put("网关超时", 30.0);
-        datas.put("商家接口异常", 15.0);
-        datas.put("未知异常", 10.0);
-        return datas;
-    }
-
     private Map<String, Integer> getInvokeInfo(String userPin, Long apiId, LocalDate date) {
         Map<String, String> raw = gwCollectMgtService.getResultHourCountByUser(userPin,
-                                        String.valueOf(apiId), date.format(DateTimeFormatter.BASIC_ISO_DATE));
+                                        String.valueOf(apiId), date.format(DateTimeFormatter.ISO_LOCAL_DATE));
         if (raw.isEmpty()) {
             return new LinkedHashMap<>();
         }
-        Map<String, Integer> datas = new LinkedHashMap<>();
-        raw.forEach((k, v) -> {
-            datas.put(k, Integer.valueOf(v));
-        });
-        return datas;
+        return raw.entrySet()
+                        .stream()
+                        .sorted(comparingInt(e -> Integer.valueOf(e.getKey())))
+                        .collect(toMap(
+                                        Map.Entry::getKey,
+                                        e -> Integer.valueOf(e.getValue()),
+                                        (k1, k2) -> k1,
+                                        LinkedHashMap::new));
     }
 
     /**
@@ -201,20 +193,30 @@ public class HighchartsExportServiceImpl implements HighchartsExportService {
      */
     private Map<String, Double> getErrorDistribute(String userPin, Long apiId, LocalDate date) {
         Map<String, String> raw = gwCollectMgtService.getResultCodeRateByUser(userPin,
-                                        String.valueOf(apiId), date.format(DateTimeFormatter.BASIC_ISO_DATE));
+                                        String.valueOf(apiId), date.format(DateTimeFormatter.ISO_LOCAL_DATE));
         if (raw.isEmpty()) {
             return new HashMap<>();
         }
+        if (raw.size() == 1 && raw.containsKey(GwErrorCodeEnum.SUCCESS.getCode())) {
+            Map<String, Double> datas = new LinkedHashMap<>();
+            datas.put(GwErrorCodeEnum.SUCCESS.getName(), Double.valueOf(raw.get(GwErrorCodeEnum.SUCCESS.getCode()).replace("%", "")));
+            return datas;
+        }
         Map<String, Double> intermediate =
-                raw.entrySet()
-                .stream()
-                .sorted(Map.Entry.comparingByValue(Comparator.comparingDouble(Double::valueOf)))
-                .collect(Collectors.toMap(e -> GwErrorCodeEnum.getNameByCode(e.getKey()), e -> Double.valueOf(e.getValue()), (k1, k2) -> k1, LinkedHashMap::new));
+                                raw.entrySet()
+                                    .stream()
+                                    .filter(e -> !GwErrorCodeEnum.SUCCESS.getCode().equals(e.getKey()))
+                                    .sorted(Map.Entry.comparingByValue(Comparator.comparingDouble(v -> Double.valueOf(v.replace("%", "")))))
+                                    .collect(toMap(
+                                                    e -> GwErrorCodeEnum.getNameByCode(e.getKey()),
+                                                    e -> Double.valueOf(e.getValue().replace("%", "")),
+                                                    (k1, k2) -> k1,
+                                                    LinkedHashMap::new));
 
         if (intermediate.size() < 4) {
             return intermediate;
         }
-        Double leftShare = intermediate.entrySet()
+        final Double leftShare = intermediate.entrySet()
                             .stream()
                             .limit(intermediate.size() - 3)
                             .map(Map.Entry::getValue)
@@ -225,12 +227,16 @@ public class HighchartsExportServiceImpl implements HighchartsExportService {
                         .skip(intermediate.size() - 3)
                         .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
-        datas.put("其它", leftShare);
+        if (datas.containsKey("其他")) {
+            datas.put("其他", datas.get("其他") + leftShare);
+        } else {
+            datas.put("其他", leftShare);
+        }
         return datas;
     }
 
     enum ColorSchemaEnum {
-        SUCCESS(0, singletonList("#8ed97e")),   // 接口调用未出错
+        SUCCESS(0, singletonList("#8ed97e")),   // 接口调用全部正常
         ONE(1, singletonList("#ffa1a5")),    // 只有一种错误
         TWO(2, asList("#ffa1a5", "#7fc3ff")),    // 有两种错误
         THREE(3, asList("#ffa1a5", "#7fc3ff", "#fed97e")),    // 有三种错误
@@ -262,3 +268,4 @@ public class HighchartsExportServiceImpl implements HighchartsExportService {
     }
 
 }
+
