@@ -1,0 +1,52 @@
+{
+    "infile":{
+        "chart":{
+            "type":"spline",
+            "marginTop": 24
+        },
+        "legend":{
+            "enabled":false
+        },
+        "credits":{
+            "enabled":false
+        },
+        "title":{
+            "text":""
+        },
+        "subtitle":{
+            "text":""
+        },
+        "yAxis":{
+            "title":{
+                "enabled":false
+            },
+            "labels": {
+                "style": {
+                    "fontSize": "24px"
+                }
+            },
+            "tickInterval": TICK_INTERVAL
+        },
+        "xAxis":{
+            "categories": CATEGORIES,
+            "labels": {
+                "style": {
+                    "fontSize": "24px"
+                }
+            },
+            "tickInterval": 6.0
+        },
+        "plotOptions":{
+            "series":{
+                "marker":{
+                    "enabled":false
+                }
+            }
+        },
+        "series":[
+            {
+                "data": DATA_ARRAY
+            }
+        ]
+    }
+}
