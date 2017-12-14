@@ -1,0 +1,54 @@
+{
+    "infile":{
+        "chart":{
+            "plotBackgroundColor":null,
+            "plotBorderWidth":null,
+            "plotShadow":false,
+            "type":"pie"
+        },
+        "colors": COLOR_ARRAY,
+        "title":{
+            "text":"",
+            "style":{
+                "display":"none"
+            }
+        },
+        "credits":{
+            "enabled":false
+        },
+        "tooltip":{
+            "pointFormat":"'{series.name}: <b>{point.percentage:.1f}%</b>'"
+        },
+        "plotOptions":{
+            "pie":{
+                "innerSize": "55%",
+                "allowPointSelect":true,
+                "cursor":"pointer",
+                "dataLabels":{
+                    "enabled":false
+                },
+                "showInLegend":true
+            }
+        },
+        "legend":{
+            "align":"left",
+            "verticalAlign":"top",
+            "layout":"vertical",
+            "itemDistance": 30,
+            "symbolPadding": 20,
+            "itemStyle": {
+                "fontSize": "24px",
+                "fontFamily": "Microsoft YaHei"
+            },
+            "x":0,
+            "y":120
+        },
+        "series":[
+            {
+                "name":"Brands",
+                "colorByPoint":true,
+                "data": DATA_ARRAY
+            }
+        ]
+    }
+}
